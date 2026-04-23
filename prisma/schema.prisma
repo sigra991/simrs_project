@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum Role {
+  ADMIN
+  RESEPSIONIS
+  DOKTER
+  APOTEKER
+}
+
+enum StatusAntrean {
+  MENUNGGU
+  DIPERIKSA
+  SELESAI
+}
+
+enum KategoriPembayaran {
+  UMUM
+  BPJS
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+  nama     String
+  role     Role
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  rekamMedis RekamMedis[] @relation("DokterRekamMedis")
+  inventory  Inventory[]  @relation("ApotekerInventory")
+
+  @@map("users")
+}
+
+model Pasien {
+  id            String   @id @default(uuid())
+  no_rm         String   @unique // Nomor Rekam Medis, format: RM-YYYYMMDD-XXXX
+  nama          String
+  nik           String
+  tgl_lahir     DateTime
+  alamat        String   @db.Text
+  jenis_kelamin String   // "Laki-laki" atau "Perempuan"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  pendaftaran Pendaftaran[]
+
+  @@map("pasien")
+}
+
+model Pendaftaran {
+  id                   String              @id @default(uuid())
+  pasienId             String
+  tanggal              DateTime            @default(now())
+  keluhan_awal         String              @db.Text
+  status               StatusAntrean       @default(MENUNGGU)
+  kategori_pembayaran  KategoriPembayaran  @default(UMUM)
+  no_bpjs              String?             // Nomor BPJS (nullable, hanya diisi kalau BPJS)
+  instansi_bpjs        String?             // Nama instansi/kantor BPJS (nullable)
+  biaya                Decimal?            @db.Decimal(12, 2) // Biaya manual input
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  pasien     Pasien      @relation(fields: [pasienId], references: [id], onDelete: Cascade)
+  rekamMedis RekamMedis? @relation("PendaftaranRekamMedis")
+
+  @@map("pendaftaran")
+}
+
+model RekamMedis {
+  id             String   @id @default(uuid())
+  pendaftaranId  String   @unique
+  dokterId       String
+  diagnosa       String   @db.Text
+  tindakan       String   @db.Text
+  tanggal        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  pendaftaran Pendaftaran @relation("PendaftaranRekamMedis", fields: [pendaftaranId], references: [id], onDelete: Cascade)
+  dokter      User        @relation("DokterRekamMedis", fields: [dokterId], references: [id])
+  resep       Resep[]
+
+  @@map("rekam_medis")
+}
+
+model Inventory {
+  id          String  @id @default(uuid())
+  kode_obat   String  @unique
+  nama_obat   String
+  stok        Int     @default(0)
+  harga       Decimal @db.Decimal(12, 2)
+  apotekerId  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  apoteker User    @relation("ApotekerInventory", fields: [apotekerId], references: [id])
+  resep    Resep[]
+
+  @@map("inventory")
+}
+
+model Resep {
+  id            String @id @default(uuid())
+  rekamMedisId  String
+  inventoryId   String
+  jumlah        Int
+  dosis         String // Contoh: "3x1 sehari sesudah makan"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  rekamMedis RekamMedis @relation(fields: [rekamMedisId], references: [id], onDelete: Cascade)
+  inventory  Inventory  @relation(fields: [inventoryId], references: [id])
+
+  @@map("resep")
+}
